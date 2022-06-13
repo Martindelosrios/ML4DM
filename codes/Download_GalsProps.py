@@ -340,7 +340,7 @@ def main():
     # 17: analysis_flag: 1 If everything ended well, 0 otherwise
 
     #i = 2
-    for i in tqdm(range(1,11)):
+    for i in tqdm(range(100,250)):
         ids = subhalos['results'][i]['id']
         try:
             gr = data.create_group('SubID_' + str(ids))
