@@ -14,39 +14,126 @@ import matplotlib.pyplot as plt
 import h5py
 
 import os
+
+
 # -
+
+def MakePlots(model, x_testset, y_testset, modelName,irun):
+    real_masses = np.exp(y_testset) # If exp
+    pred_masses = np.exp(model.predict(x_testset))
+    diff = real_masses - pred_masses
+    
+    log_real_masses = np.log(real_masses)
+    log_pred_masses= np.log(pred_masses)
+    diff_log = log_real_masses - log_pred_masses
+    
+    mse = np.mean(diff**2, 0)
+    std = np.std(diff**2, 0)
+    mse_rel = np.mean((diff / real_masses) ** 2, 0)
+    std_rel = np.std((diff / real_masses) ** 2, 0)
+    mae = np.mean(np.abs(diff), 0)
+    mae_std = np.std(np.abs(diff), 0)
+    mae_rel = np.mean(np.abs(diff / real_masses), 0)
+    std_rel = np.std(np.abs(diff / real_masses), 0)
+        
+    mse_log = np.mean(diff_log**2, 0)
+    std_log = np.std(diff_log**2, 0)
+    mse_log_rel = np.mean((diff_log / log_real_masses) ** 2, 0)
+    std_log_rel = np.std((diff_log / log_real_masses) ** 2, 0)
+    mae_log = np.mean(np.abs(diff_log), 0)
+    mae_log_std = np.std(np.abs(diff_log), 0)
+    mae_log_rel = np.mean(np.abs(diff_log / log_real_masses), 0)
+    std_log_rel = np.std(np.abs(diff_log / log_real_masses), 0)
+    
+    # Residuals
+    plt.cla()
+    plt.clf()
+    plt.xlabel(r'$\Delta \log M$')
+    plt.ylabel(r'P($\Delta \log M$)')
+    for i in range(20):
+        plt.hist(diff_log[:,i], bins=20, density=True, histtype='step', alpha=1, label=r'$r = %s \; \mathrm{kpc}$'%np.around(bins[i], 1))
+    #plt.legend(loc='upper left', fontsize='small')
+    plt.grid(color='grey', linestyle=':', linewidth=0.25)
+    plt.tight_layout()
+    plt.savefig('../data/models/' + modelName + 'graph/residuals_' + str(irun) +'.pdf')
+    
+    # MSE and MAE
+    plt.cla()
+    plt.clf()
+    plt.xlabel(r'$r$ [kpc]')
+    plt.ylabel(r'$\Delta$')
+    plt.plot(np.around(bins, 1), mse_rel, label=r'$\left< (\frac{\Delta M}{M})^{2} \right>(r)$')
+    plt.plot(np.around(bins, 1), mae_rel, label=r'$\left< \left|\Delta M / M \right| \right>(r)$')
+    plt.grid(color='grey', linestyle=':', linewidth=0.25, which='both')
+    plt.xscale('log')
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig('../data/models/' + modelName + 'graph/MSE_MAE_' + str(irun) + '.pdf')
+    
+    # MSE and MAE in log
+    plt.cla()
+    plt.clf()
+    plt.xlabel(r'$r$ [kpc]')
+    plt.ylabel(r'$\Delta$')
+    plt.plot(np.around(bins, 1), mse_log_rel, label=r'$\left< (\frac{\Delta \mu}{\mu})^{2} \right>(r)$')
+    plt.plot(np.around(bins, 1), mae_log_rel, label=r'$\left< \left|\Delta \mu / \mu \right| \right>(r)$')
+    plt.grid(color='grey', linestyle=':', linewidth=0.25, which='both')
+    plt.xscale('log')
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig('../data/models/' + modelName + 'graph/MSE_MAE_log_' + str(irun) + '.pdf')
+    
+    # Scatter-plots
+    plt.cla()
+    plt.clf()
+    fig, axes          = plt.subplots(5, figsize=(5, 50), sharex=True)
+    mass_min, mass_max = int(np.amin([log_real_masses, log_pred_masses])), int(np.amax([log_real_masses, log_pred_masses])) + 1
+    ticks              = np.arange(mass_min, mass_max + 1)
+
+    j = 0
+    for i in range(20):
+        if (i%5 == 0):
+            ax = axes[j,]
+            ax.plot((mass_min, mass_max), (mass_min, mass_max), color='black', ls='--', lw=1, zorder=2)
+            ax.scatter(log_real_masses[:,i], log_pred_masses[:,i], s=0.001, zorder=3)
+            ax.set_aspect('equal', 'box')
+            ax.set_title(r'log $M_\mathrm{DM}(r \leq %s \mathrm{kpc})$' % np.around(bins[i], 1))
+            ax.text(0.05, 0.95, r'$\left< \left(\Delta M / M \right)^2 \right> = %s$' % np.around(std_rel[i], 2), fontsize='small', horizontalalignment='left', verticalalignment='top', transform=ax.transAxes, zorder=4)
+            ax.grid(color='grey', linestyle=':', linewidth=0.5, zorder=1)
+            ax.xaxis.set_ticks(ticks)
+            ax.yaxis.set_ticks(ticks)
+            if i == len(axes) - 1: ax.set_xlabel(r'True')
+            ax.set_ylabel(r'Predicted')
+            j = j+1
+            plt.savefig('../data/models/' + modelName + 'graph/scatter_' + str(irun) + '.pdf', bbox_inches='tight', dpi=100)     
+            
+
 
 # # Let's load the data
 
-modelName = 'SDSS_I_arch_A_2/'
+# !ls ../data/
+
+modelName = 'SDSS_I_HI_1_arch_A/'
 try:
     os.mkdir('../data/models/' + modelName)
+    os.mkdir('../data/models/' + modelName + 'graph')
 except:
     print('Model already exist')
 
-data = h5py.File('../data/dataset_SDSS_I.h5py','r')
-x_data = data['x_data'][()]
-y_data = data['y_data'][()]
+data = h5py.File('../data/dataset_SDSS_I_HI_1.h5py','r')
+
+x_trainset = data['x_train'][()]
+y_trainset = data['y_train'][()]
+x_valset = data['x_val'][()]
+y_valset = data['y_val'][()]
+x_testset = data['x_test'][()]
+y_testset = data['y_test'][()]
+
 data.close()
 
-ngals, npix, _, nchannels = x_data.shape
-ngals = int(ngals / 3) # We have 3 images per galaxy
-
-# +
-# Let's split into train and test sets
-
-ntrain = int(80 * ngals / 100)
-nval   = int(15 * ngals / 100)
-ntest  = ngals - ntrain - nval
-
-x_trainset = x_data[:(3 * ntrain)]
-x_valset   = x_data[(3 * ntrain):(3 * ntrain + 3 * nval)]
-x_testset  = x_data[(3 * ntrain + 3 * nval):]
-
-y_trainset = y_data[:(3 * ntrain)]
-y_valset   = y_data[(3 * ntrain):(3 * ntrain + 3 * nval)]
-y_testset  = y_data[(3 * ntrain + 3 * nval):]
-# -
+ntrain, npix, _, nchannels = x_trainset.shape
+nval, _, _, _ = x_valset.shape
+ntest, _, _, _ = x_testset.shape
 
 bins = np.geomspace(1, 100, 20) # Radial bins for the DM profile
 
@@ -154,8 +241,9 @@ score = model.evaluate(x_trainset[:32,:,:,:], y_trainset[:32,:], verbose=1)
 print(score)
 
 # +
+# %%time
 batch_size = 32
-epochs     = 1500
+epochs     = 5000
 
 history = model.fit(x_trainset[:batch_size,:,:,:], y_trainset[:batch_size,:],
                   epochs           = epochs,
@@ -172,104 +260,52 @@ print(score)
 np.random.seed(28890)
 
 batch_size = 32
-epochs     = 100
+epochs     = 200
 
-for i in range(1, 4):
-#i=0  
-    # instantiate model
-    model = initialization()
-    optimizer = optimizers.Adam(learning_rate = 1e-3, beta_1 = 0.9, beta_2 = 0.999, amsgrad = False)
-    model.compile(optimizer = optimizer, loss = 'mse', metrics=['mae','mse'])
+with h5py.File('../data/models/' + modelName + '/scores.h5', 'a') as scores:
+    for i in range(0, 10):
+        try:
+            run = scores.create_group('run_' + str(i))
+            flag = 1
+        except:
+            print('Model already trained')
+            flag = 0
+        
+        if flag == 1:
+            # instantiate model
+            model = initialization()
+            optimizer = optimizers.Adam(learning_rate = 1e-3, beta_1 = 0.9, beta_2 = 0.999, amsgrad = False)
+            model.compile(optimizer = optimizer, loss = 'mse', metrics=['mae','mse'])
 
-    # Let's compute a sample of all the train indeces witouth replacement
-    train_indices = np.arange( len(x_trainset) )
-    train_indices = np.random.choice(train_indices, len(x_trainset), replace = True) 
+            # Let's compute a sample of all the train indeces witouth replacement
+            train_indices = np.arange( len(x_trainset) )
+            train_indices = np.random.choice(train_indices, len(x_trainset), replace = True) 
 
-    x_trainset_cp = x_trainset[train_indices]
-    y_trainset_cp = y_trainset[train_indices]
+            x_trainset_cp = x_trainset[train_indices]
+            y_trainset_cp = y_trainset[train_indices]
 
-    print('Fitting ' + str(i) + ' model ...')
-    history = model.fit(x_trainset_cp, y_trainset_cp,
-                    epochs           = epochs,
-                    verbose          = 0,
-                    #callbacks        = [es],
-                    validation_data  = (x_valset, y_valset))
-    score = model.evaluate(x_testset, y_testset,verbose=1) 
-    print('Results obtained in the testset...')
-    print(score)  
-    print('Saving ' + str(i) + ' model ...')
-    model.save_weights('../data/models/' + modelName + 'weights_' + str(i) + '.hdf5')
-    K.clear_session()
+            print('Fitting ' + str(i) + ' model ...')
+            history = model.fit(x_trainset_cp, y_trainset_cp,
+                            epochs           = epochs,
+                            verbose          = 0,
+                            #callbacks        = [es],
+                            validation_data  = (x_valset, y_valset))
+            score = model.evaluate(x_testset, y_testset,verbose=1) 
+            print('Results obtained in the testset...')
+            print(score)  
+            print('Saving ' + str(i) + ' model ...')
+
+            run.create_dataset('train_loss', data = history.history['loss'])
+            run.create_dataset('train_mae', data = history.history['mae'])
+            run.create_dataset('train_mse', data = history.history['mse'])
+            run.create_dataset('val_loss', data = history.history['val_loss'])
+            run.create_dataset('val_mae', data = history.history['val_mae'])
+            run.create_dataset('val_mse', data = history.history['val_mse'])
+            model.save_weights('../data/models/' + modelName + 'weights_' + str(i) + '.hdf5')
+            MakePlots(model, x_testset, y_testset, modelName, i)
+            K.clear_session()
 # -
 
 # # Plots
 
-out_pred = model.predict(x_testset)
-
-real_masses = np.exp(y_testset) # If exp
-pred_masses = np.exp(out_pred)
-
-diff = real_masses - pred_masses
-
-avg     = np.average(abs(diff), 0)
-avg_rel = np.average(abs(diff) / real_masses, 0)
-std     = np.std(diff, 0)
-std_rel = np.std(diff / real_masses, 0)
-dex_abs = np.average(abs(np.log10(real_masses / pred_masses)), 0)
-dex     = np.average(np.log10(real_masses / pred_masses), 0)
-
-masses      = np.log(real_masses)
-predictions = np.log(pred_masses)
-
-# +
-outputs = 20 # len(real_masses[0,:]) -1
-rPts    = bins#np.array([2.0, 4.0, 6.0, 8.0, 10.0, 15.0, 20.0, 25.0, 30.0, 35.0, 40.0, 45.0, 50.0, 60.0, 70.0, 80.0, 90.0, 100.0])
-plt.cla()
-plt.clf()
-fig, axes          = plt.subplots(5, figsize=(5, 50), sharex=True)
-mass_min, mass_max = int(np.amin([masses, predictions])), int(np.amax([masses, predictions])) + 1
-ticks              = np.arange(mass_min, mass_max + 1)
-
-j = 0
-for i in range(outputs):
-    if (i%5 == 0):
-        ax = axes[j,]
-        ax.plot((mass_min, mass_max), (mass_min, mass_max), color='black', ls='--', lw=1, zorder=2)
-        ax.scatter(masses[:,i], predictions[:,i], s=0.001, zorder=3)
-        ax.set_aspect('equal', 'box')
-        ax.set_title(r'log $M_\mathrm{DM}(r \leq %s \mathrm{kpc})$' % np.around(rPts[i], 1))
-        ax.text(0.05, 0.95, r'$\left< \left(\Delta M / M \right)^2 \right> = %s$' % np.around(std_rel[i], 2), fontsize='small', horizontalalignment='left', verticalalignment='top', transform=ax.transAxes, zorder=4)
-        ax.grid(color='grey', linestyle=':', linewidth=0.5, zorder=1)
-        ax.xaxis.set_ticks(ticks)
-        ax.yaxis.set_ticks(ticks)
-        if i == len(axes) - 1: ax.set_xlabel(r'True')
-        ax.set_ylabel(r'Predicted')
-        j = j+1
-#plt.savefig(folderName + '/scatter.pdf', bbox_inches='tight', dpi=100)
-# -
-
-diff = masses - predictions
-plt.cla()
-plt.clf()
-plt.xlabel(r'$\Delta \log M$')
-plt.ylabel(r'P($\Delta \log M$)')
-for i in range(outputs):
-    plt.hist(diff[:,i], bins=20, density=True, histtype='step', alpha=1, label=r'$r = %s \; \mathrm{kpc}$'%np.around(rPts[i], 1))
-#plt.legend(loc='upper left', fontsize='small')
-plt.grid(color='grey', linestyle=':', linewidth=0.25)
-plt.tight_layout()
-#plt.savefig(folderName + '/residuals.pdf')
-
-plt.cla()
-plt.clf()
-plt.xlabel(r'$r$ [kpc]')
-plt.ylabel(r'$\Delta$')
-plt.plot(np.around(rPts, 1), avg_rel, label=r'$\left< \left|\Delta M / M \right| \right>(r)$')
-plt.plot(np.around(rPts, 1), std_rel, label=r'$\left< \left(\Delta M / M \right)^2 \right>(r)$')
-plt.grid(color='grey', linestyle=':', linewidth=0.25, which='both')
-plt.xscale('log')
-plt.legend()
-plt.tight_layout()
-#plt.savefig(folderName + '/sigma.pdf')
-
-
+MakePlots(model, x_testset, y_testset, modelName, 49)
