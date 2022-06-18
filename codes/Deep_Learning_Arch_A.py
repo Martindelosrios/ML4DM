@@ -105,8 +105,8 @@ def MakePlots(model, x_testset, y_testset, modelName,irun):
             if i == len(axes) - 1: ax.set_xlabel(r'True')
             ax.set_ylabel(r'Predicted')
             j = j+1
-            plt.savefig('../data/models/' + modelName + 'graph/scatter_' + str(irun) + '.pdf', bbox_inches='tight', dpi=100)     
-            
+     plt.savefig('../data/models/' + modelName + 'graph/scatter_' + str(irun) + '.pdf', bbox_inches='tight', dpi=100)     
+
 
 
 # # Let's load the data
