@@ -105,22 +105,21 @@ def MakePlots(model, x_testset, y_testset, modelName,irun):
             if i == len(axes) - 1: ax.set_xlabel(r'True')
             ax.set_ylabel(r'Predicted')
             j = j+1
-     plt.savefig('../data/models/' + modelName + 'graph/scatter_' + str(irun) + '.pdf', bbox_inches='tight', dpi=100)     
-
+    plt.savefig('../data/models/' + modelName + 'graph/scatter_' + str(irun) + '.pdf', bbox_inches='tight', dpi=100)     
 
 
 # # Let's load the data
 
 # !ls ../data/
 
-modelName = 'SDSS_I_HI_1_arch_A/'
+modelName = 'SDSS_URZ_HI_012_arch_A/'
 try:
     os.mkdir('../data/models/' + modelName)
     os.mkdir('../data/models/' + modelName + 'graph')
 except:
     print('Model already exist')
 
-data = h5py.File('../data/dataset_SDSS_I_HI_1.h5py','r')
+data = h5py.File('../data/dataset_SDSS_URZ_HI_012.h5py','r')
 
 x_trainset = data['x_train'][()]
 y_trainset = data['y_train'][()]
@@ -136,6 +135,8 @@ nval, _, _, _ = x_valset.shape
 ntest, _, _, _ = x_testset.shape
 
 bins = np.geomspace(1, 100, 20) # Radial bins for the DM profile
+
+nchannels
 
 # ## Let's normalize the in/outputs
 
@@ -234,7 +235,8 @@ model.summary()
 optimizer = optimizers.Adam(learning_rate = 1e-3, beta_1 = 0.9, beta_2 = 0.999, amsgrad = False)
 model.compile(optimizer = optimizer, loss = 'mse', metrics=['mae','mse'])
 
-# ## Some check previous to the fit
+# ## Some check previous to the fit 
+# - [x] Overfitting 1 batch
 
 out_pred = model.predict(x_trainset[:32,:,:,:])
 score = model.evaluate(x_trainset[:32,:,:,:], y_trainset[:32,:], verbose=1) 
@@ -264,14 +266,8 @@ epochs     = 200
 
 with h5py.File('../data/models/' + modelName + '/scores.h5', 'a') as scores:
     for i in range(0, 10):
-        try:
+        if 'run_' + str(i) not in scores.keys():
             run = scores.create_group('run_' + str(i))
-            flag = 1
-        except:
-            print('Model already trained')
-            flag = 0
-        
-        if flag == 1:
             # instantiate model
             model = initialization()
             optimizer = optimizers.Adam(learning_rate = 1e-3, beta_1 = 0.9, beta_2 = 0.999, amsgrad = False)
@@ -309,3 +305,5 @@ with h5py.File('../data/models/' + modelName + '/scores.h5', 'a') as scores:
 # # Plots
 
 MakePlots(model, x_testset, y_testset, modelName, 49)
+
+
