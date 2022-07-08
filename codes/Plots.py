@@ -18,6 +18,72 @@ import os
 
 # # Some custom functions
 
+def ReadData(modelName):
+    data = h5py.File('../data/dataset_SDSS_I.h5py','r')
+    x_trainset = data['x_train'][()]
+    y_trainset = data['y_train'][()]
+    x_valset = data['x_val'][()]
+    y_valset = data['y_val'][()]
+    x_testset = data['x_test'][()]
+    y_testset = data['y_test'][()]
+    data.close()
+    ntrain, npix, _, nchannels = x_trainset.shape
+    nval, _, _, _ = x_valset.shape
+    ntest, _, _, _ = x_testset.shape
+    bins = np.geomspace(1, 100, 20) # Radial bins for the DM profile
+    y_trainset = np.log(y_trainset)
+    y_testset  = np.log(y_testset)
+    y_valset   = np.log(y_valset)
+    
+    # network parameters
+    input_shape = (npix, npix, nchannels) # Input shape (#rows, #cols, #channels)
+    actFunction = 'relu'#tf.keras.layers.LeakyReLU(alpha=0.01) #'relu'
+
+    # Hidden layers dimensions
+    output_dim = y_trainset.shape[1]
+    model = initialization()
+    
+    mse = []
+    test_pred = np.zeros((len(scores), len(x_testset), 20))
+    for i in range(len(scores)):
+        optimizer = optimizers.Adam(learning_rate = 1e-3, beta_1 = 0.9, beta_2 = 0.999, amsgrad = False)
+        model.compile(optimizer = optimizer, loss = 'mse', metrics=['mae','mse'])
+        model.load_weights('../data/models/' + modelName + '/weights_' + str(i) + '.hdf5')
+        mse.append(model.evaluate(x_testset, y_testset,verbose=0)[0])
+        test_pred[i,:,:] = model.predict(x_testset)    
+        
+    mean_pred = np.mean(test_pred, axis=0)
+    std_pred = np.std(test_pred, axis=0)
+
+    real_masses = np.exp(y_testset) # If exp
+    pred_masses = np.exp(mean_pred)
+    diff = real_masses - pred_masses
+
+    log_real_masses = np.log(real_masses)
+    log_pred_masses= np.log(pred_masses)
+    diff_log = log_real_masses - log_pred_masses
+
+    mse = np.mean(diff**2, 0)
+    std = np.std(diff**2, 0)
+    mse_rel = np.mean((diff / real_masses) ** 2, 0)
+    std_rel = np.std((diff / real_masses) ** 2, 0)
+    mae = np.mean(np.abs(diff), 0)
+    mae_std = np.std(np.abs(diff), 0)
+    mae_rel = np.mean(np.abs(diff / real_masses), 0)
+    std_rel = np.std(np.abs(diff / real_masses), 0)
+
+    mse_log = np.mean(diff_log**2, 0)
+    std_log = np.std(diff_log**2, 0)
+    mse_log_rel = np.mean((diff_log / log_real_masses) ** 2, 0)
+    std_log_rel = np.std((diff_log / log_real_masses) ** 2, 0)
+    mae_log = np.mean(np.abs(diff_log), 0)
+    mae_log_std = np.std(np.abs(diff_log), 0)
+    mae_log_rel = np.mean(np.abs(diff_log / log_real_masses), 0)
+    std_log_rel = np.std(np.abs(diff_log / log_real_masses), 0)
+    
+    return mse_log_rel, mae_log_rel, diff_log, mse_rel, mae_rel, diff
+
+
 def ResidualPlot(model, x_testset, y_testset, modelName, irun, save = False):
     real_masses = np.exp(y_testset) # If exp
     pred_masses = np.exp(model.predict(x_testset))
@@ -205,10 +271,12 @@ def initialization():
 
 # # Let's read the data
 
-modelName = 'SDSS_I_HI_1_arch_A/'
+# !ls ../data/models
+
+modelName = 'SDSS_I_arch_A/'
 
 
-data = h5py.File('../data/dataset_SDSS_I_HI_1.h5py','r')
+data = h5py.File('../data/dataset_SDSS_I.h5py','r')
 
 x_trainset = data['x_train'][()]
 y_trainset = data['y_train'][()]
@@ -228,6 +296,8 @@ y_trainset = np.log(y_trainset)
 y_testset  = np.log(y_testset)
 y_valset   = np.log(y_valset)
 
+nchannels
+
 # +
 # network parameters
 input_shape = (npix, npix, nchannels) # Input shape (#rows, #cols, #channels)
@@ -244,11 +314,18 @@ model.summary()
 scores = h5py.File('../data/models/' + modelName + '/scores.h5', 'r')
 scores.keys()
 
-val_loss = np.zeros((len(scores), len(scores['run_0']['val_loss'])))
-train_loss = np.zeros((len(scores), len(scores['run_0']['val_loss'])))
+# +
+val_loss = np.zeros((len(scores), 200))
+train_loss = np.zeros((len(scores), 200))
 for i, sc in enumerate(scores):
-    val_loss[i,:] = scores[sc]['val_loss']
-    train_loss[i,:] = scores[sc]['train_loss']
+    val_loss[i,:len(scores[sc]['val_loss'])] = scores[sc]['val_loss']
+    train_loss[i,:len(scores[sc]['train_loss'])] = scores[sc]['train_loss']
+    
+#aux_ind = np.where(val_loss != 0)
+#val_loss = val_loss[aux_ind[0], aux_ind[1]]
+
+#aux_ind = np.where(train_loss != 0)
+#train_loss = train_loss[aux_ind[0], aux_ind[1]]
 
 # +
 mean_val_loss = np.mean(val_loss, axis = 0)
@@ -257,12 +334,15 @@ mean_train_loss = np.mean(train_loss, axis = 0)
 std_train_loss = np.std(train_loss, axis = 0)
 
 plt.plot(mean_val_loss, label = 'Val loss')
-plt.fill_between(np.arange(0, len(scores['run_0']['val_loss'])), (mean_val_loss - std_val_loss), (mean_val_loss + std_val_loss), alpha = 0.5 )
+plt.fill_between(np.arange(0, 200), (mean_val_loss - std_val_loss), (mean_val_loss + std_val_loss), alpha = 0.5 )
 plt.plot(mean_train_loss, label = 'Train loss', linestyle = ':')
-plt.fill_between(np.arange(0, len(scores['run_0']['val_loss'])), (mean_train_loss - std_train_loss), (mean_train_loss + std_train_loss), alpha = 0.5 )
+plt.fill_between(np.arange(0, 200), (mean_train_loss - std_train_loss), (mean_train_loss + std_train_loss), alpha = 0.5 )
 plt.legend()
 plt.yscale('log')
 plt.xscale('log')
+plt.xlabel('Epochs')
+plt.ylabel('Loss')
+plt.savefig('../data/models/' + modelName + 'graph/loss_history.pdf')
 # -
 
 mse = []
@@ -304,6 +384,33 @@ mae_log_std = np.std(np.abs(diff_log), 0)
 mae_log_rel = np.mean(np.abs(diff_log / log_real_masses), 0)
 std_log_rel = np.std(np.abs(diff_log / log_real_masses), 0)
 
+
+# +
+rand_pred = np.random.normal(np.mean(y_trainset,axis = 0), np.std(y_trainset,axis = 0), y_testset.shape )
+
+rand_masses = np.exp(rand_pred)
+rand_diff = real_masses - rand_masses
+
+log_rand_masses= np.log(rand_masses)
+rand_diff_log = log_real_masses - log_rand_masses
+
+rand_mse = np.mean(rand_diff**2, 0)
+rand_std = np.std(rand_diff**2, 0)
+rand_mse_rel = np.mean((rand_diff / real_masses) ** 2, 0)
+rand_std_rel = np.std((rand_diff / real_masses) ** 2, 0)
+rand_mae = np.mean(np.abs(rand_diff), 0)
+rand_mae_std = np.std(np.abs(rand_diff), 0)
+rand_mae_rel = np.mean(np.abs(rand_diff / real_masses), 0)
+rand_std_rel = np.std(np.abs(rand_diff / real_masses), 0)
+
+rand_mse_log = np.mean(rand_diff_log**2, 0)
+rand_std_log = np.std(rand_diff_log**2, 0)
+rand_mse_log_rel = np.mean((rand_diff_log / log_real_masses) ** 2, 0)
+rand_std_log_rel = np.std((rand_diff_log / log_real_masses) ** 2, 0)
+rand_mae_log = np.mean(np.abs(rand_diff_log), 0)
+rand_mae_log_std = np.std(np.abs(rand_diff_log), 0)
+rand_mae_log_rel = np.mean(np.abs(rand_diff_log / log_real_masses), 0)
+rand_std_log_rel = np.std(np.abs(rand_diff_log / log_real_masses), 0)
 # -
 
 # Residuals
@@ -311,10 +418,13 @@ f, ax = plt.subplots()
 ax.set_xlabel(r'$\Delta \log M$')
 ax.set_ylabel(r'P($\Delta \log M$)')
 for i in range(20):
-    ax.hist(diff_log[:,i], bins=20, density=True, histtype='step', alpha=1, label=r'$r = %s \; \mathrm{kpc}$'%np.around(bins[i], 1))
+    ax.hist(diff_log[:,i], bins=20, density=True, histtype='step', alpha=1, label='r = {:.2e}'.format(np.around(bins[i], 1)) +  ' $\mathrm{kpc}$')
+    ax.hist(rand_diff_log[:,i], bins=20, density=True, histtype='step', alpha=1, label=r'Random', color = 'black', linestyle = ':')
 #plt.legend(loc='upper left', fontsize='small')
-ax.grid(color='grey', linestyle=':', linewidth=0.25)
+ax.grid(color='grey', linestyle=':')
 plt.savefig('../data/models/' + modelName + 'graph/MeanResiduals.pdf')
+
+mse_log_rel, mae_log_rel, diff_log, mse_rel, mae_rel, diff = ReadData(modelName)
 
 # +
 # MSE and MAE in log
@@ -324,10 +434,12 @@ ax.set_xlabel(r'$r$ [kpc]')
 ax.set_ylabel(r'$\Delta$')
 ax.plot(np.around(bins, 1), mse_log_rel, label=r'$\left< (\frac{\Delta \mu}{\mu})^{2} \right>(r)$')
 ax.plot(np.around(bins, 1), mae_log_rel, label=r'$\left< \left|\Delta \mu / \mu \right| \right>(r)$')
-ax.grid(color='grey', linestyle=':', linewidth=0.25, which='both')
+ax.plot(np.around(bins, 1), rand_mse_log_rel, label=r'Random', color = 'black', linestyle =':')
+ax.plot(np.around(bins, 1), rand_mae_log_rel, color = 'black', linestyle =':')
+ax.grid(color='grey', linestyle=':', which='both')
 ax.set_xscale('log')
 ax.legend()
-plt.savefig('../data/models/' + modelName + 'graph/Mean_MSE_MAE_log.pdf')
+#plt.savefig('../data/models/' + modelName + 'graph/Mean_MSE_MAE_log.pdf')
 
 
 # +
@@ -338,10 +450,12 @@ ax.set_xlabel(r'$r$ [kpc]')
 ax.set_ylabel(r'$\Delta$')
 ax.plot(np.around(bins, 1), mse_rel, label=r'$\left< (\frac{\Delta M}{M})^{2} \right>(r)$')
 ax.plot(np.around(bins, 1), mae_rel, label=r'$\left< \left|\Delta M / M \right| \right>(r)$')
-ax.grid(color='grey', linestyle=':', linewidth=0.25, which='both')
-ax.set_xscale('log')
+ax.plot(np.around(bins, 1), rand_mse_rel, label=r'Random', color = 'black', linestyle =':')
+ax.plot(np.around(bins, 1), rand_mae_rel, color = 'black', linestyle =':')
 ax.legend()
-plt.savefig('../data/models/' + modelName + 'graph/Mean_MSE_MAE.pdf')
+ax.set_xscale('log')
+ax.grid(color='grey', linestyle=':', which='both')
+#plt.savefig('../data/models/' + modelName + 'graph/Mean_MSE_MAE.pdf')
 # -
 
 # # Deprecated

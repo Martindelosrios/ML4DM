@@ -112,14 +112,14 @@ def MakePlots(model, x_testset, y_testset, modelName,irun):
 
 # !ls ../data/
 
-modelName = 'SDSS_URZ_HI_012_arch_A/'
+modelName = 'SDSS_SDSS_I_arch_A/'
 try:
     os.mkdir('../data/models/' + modelName)
     os.mkdir('../data/models/' + modelName + 'graph')
 except:
     print('Model already exist')
 
-data = h5py.File('../data/dataset_SDSS_URZ_HI_012.h5py','r')
+data = h5py.File('../data/dataset_SDSS_I.h5py','r')
 
 x_trainset = data['x_train'][()]
 y_trainset = data['y_train'][()]
@@ -231,9 +231,14 @@ def initialization():
 model = initialization()
 model.summary()
 
+# +
 # instantiate model
 optimizer = optimizers.Adam(learning_rate = 1e-3, beta_1 = 0.9, beta_2 = 0.999, amsgrad = False)
 model.compile(optimizer = optimizer, loss = 'mse', metrics=['mae','mse'])
+
+# Callbacks
+es = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=30, restore_best_weights = True)
+# -
 
 # ## Some check previous to the fit 
 # - [x] Overfitting 1 batch
@@ -267,7 +272,6 @@ epochs     = 200
 with h5py.File('../data/models/' + modelName + '/scores.h5', 'a') as scores:
     for i in range(0, 10):
         if 'run_' + str(i) not in scores.keys():
-            run = scores.create_group('run_' + str(i))
             # instantiate model
             model = initialization()
             optimizer = optimizers.Adam(learning_rate = 1e-3, beta_1 = 0.9, beta_2 = 0.999, amsgrad = False)
@@ -284,12 +288,13 @@ with h5py.File('../data/models/' + modelName + '/scores.h5', 'a') as scores:
             history = model.fit(x_trainset_cp, y_trainset_cp,
                             epochs           = epochs,
                             verbose          = 0,
-                            #callbacks        = [es],
+                            callbacks        = [es],
                             validation_data  = (x_valset, y_valset))
             score = model.evaluate(x_testset, y_testset,verbose=1) 
             print('Results obtained in the testset...')
             print(score)  
             print('Saving ' + str(i) + ' model ...')
+            run = scores.create_group('run_' + str(i))
 
             run.create_dataset('train_loss', data = history.history['loss'])
             run.create_dataset('train_mae', data = history.history['mae'])
