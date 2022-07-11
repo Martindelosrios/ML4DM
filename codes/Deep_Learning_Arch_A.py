@@ -200,13 +200,13 @@ def initialization():
     model.add(Dropout(0.25)) 
     model.add(BatchNormalization())
 
-    model.add(Conv2D(filters = 128, kernel_size = (5,5), strides = 2 , padding = 'same', input_shape = input_shape))
+    model.add(Conv2D(filters = 128, kernel_size = (5,5), strides = 2 , padding = 'same'))
     model.add(Activation(actFunction))
     model.add(MaxPooling2D(pool_size=(2, 2)))
     model.add(Dropout(0.25)) 
     model.add(BatchNormalization())
 
-    model.add(Conv2D(filters = 128, kernel_size = (5,5), strides = 2 , padding = 'same', input_shape = input_shape))
+    model.add(Conv2D(filters = 128, kernel_size = (5,5), strides = 2 , padding = 'same'))
     model.add(Activation(actFunction))
     model.add(MaxPooling2D(pool_size=(2, 2)))
     model.add(Dropout(0.25)) 
