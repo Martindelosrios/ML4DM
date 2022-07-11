@@ -110,9 +110,11 @@ def MakePlots(model, x_testset, y_testset, modelName,irun):
 
 # # Let's load the data
 
+# !ls ../data/models
+
 # !ls ../data/
 
-modelName = 'SDSS_SDSS_I_arch_A/'
+modelName = 'SDSS_I_arch_A/'
 try:
     os.mkdir('../data/models/' + modelName)
     os.mkdir('../data/models/' + modelName + 'graph')
@@ -188,7 +190,7 @@ output_dim        = y_trainset.shape[1]
 
 # -
 
-def initialization():
+def initialization(input_shape, output_dim, actFunction):
     K.clear_session()
     tf.random.set_seed(28890)
     # build model
@@ -228,7 +230,7 @@ def initialization():
 
     model.add(Dense(output_dim, name = 'output', activation = 'linear'))
     return model
-model = initialization()
+model = initialization(input_shape, output_dim, actFunction)
 model.summary()
 
 # +
@@ -273,7 +275,7 @@ with h5py.File('../data/models/' + modelName + '/scores.h5', 'a') as scores:
     for i in range(0, 10):
         if 'run_' + str(i) not in scores.keys():
             # instantiate model
-            model = initialization()
+            model = initialization(input_shape, output_dim, actFunction)
             optimizer = optimizers.Adam(learning_rate = 1e-3, beta_1 = 0.9, beta_2 = 0.999, amsgrad = False)
             model.compile(optimizer = optimizer, loss = 'mse', metrics=['mae','mse'])
 
@@ -284,7 +286,7 @@ with h5py.File('../data/models/' + modelName + '/scores.h5', 'a') as scores:
             x_trainset_cp = x_trainset[train_indices]
             y_trainset_cp = y_trainset[train_indices]
 
-            print('Fitting ' + str(i) + ' model ...')
+            print('Fitting model ' + str(i+1) + ' ...')
             history = model.fit(x_trainset_cp, y_trainset_cp,
                             epochs           = epochs,
                             verbose          = 0,
@@ -293,7 +295,7 @@ with h5py.File('../data/models/' + modelName + '/scores.h5', 'a') as scores:
             score = model.evaluate(x_testset, y_testset,verbose=1) 
             print('Results obtained in the testset...')
             print(score)  
-            print('Saving ' + str(i) + ' model ...')
+            print('Saving model ' + str(i+1) + ' ...')
             run = scores.create_group('run_' + str(i))
 
             run.create_dataset('train_loss', data = history.history['loss'])
@@ -303,12 +305,30 @@ with h5py.File('../data/models/' + modelName + '/scores.h5', 'a') as scores:
             run.create_dataset('val_mae', data = history.history['val_mae'])
             run.create_dataset('val_mse', data = history.history['val_mse'])
             model.save_weights('../data/models/' + modelName + 'weights_' + str(i) + '.hdf5')
-            MakePlots(model, x_testset, y_testset, modelName, i)
+            #MakePlots(model, x_testset, y_testset, modelName, i)
             K.clear_session()
+
+# +
+img_idx = np.random.randint(0, y_testset.shape[0])
+ch = 0
+fig, axes = plt.subplots(4,5,figsize=(14,14), sharex=True, sharey=True, gridspec_kw={'hspace':-0.4, 'wspace':0.1})
+
+axes[0, 0].imshow(x_testset[img_idx,:,:,ch])
+
+for i in range(19):
+    input_img = tf.reshape(tf.Variable(x_testset[img_idx,:,:,:], dtype=float, trainable = True), (1,128,128,nchannels))
+    with tf.GradientTape() as tape:
+        tape.watch(input_img)
+        result = model(input_img)[0,i]
+        
+    grads = tape.gradient(result, input_img)     
+    dgrad_abs = tf.math.abs(grads)
+    dgrad_max = grads.numpy()[0,:,:,ch]#np.max(dgrad_abs, axis=3)[0]
+    arr_min, arr_max  = np.min(dgrad_max), np.max(dgrad_max)
+    grad_eval = (dgrad_max - arr_min) / (arr_max - arr_min + 1e-18)
+    
+    i = axes[(i+1)//5, (i+1)%5].imshow(grad_eval,cmap="jet")
+    #fig.colorbar(i)
 # -
-
-# # Plots
-
-MakePlots(model, x_testset, y_testset, modelName, 49)
 
 

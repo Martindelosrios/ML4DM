@@ -424,9 +424,6 @@ ax.legend()
 ax.set_xscale('log')
 ax.grid(color='grey', linestyle=':', which='both')
 #plt.savefig('../data/models/' + modelName + 'graph/Mean_MSE_MAE.pdf')
-# -
-
-grads.shape
 
 # +
 #img_idx = randint(0, y_testset.shape[0])
