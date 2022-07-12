@@ -1,6 +1,9 @@
 # # Some neccesary libraries and functions
 
 # +
+import os
+os.environ["CUDA_VISIBLE_DEVICES"] = "-1" # Comment this line for using the GPU
+
 from tensorflow.keras.layers import Input, Dense, Dropout, AveragePooling2D, Flatten, Conv2D
 from tensorflow.keras.layers import MaxPooling2D, BatchNormalization, Activation
 from tensorflow.keras.models import Model, Sequential
@@ -12,8 +15,6 @@ import tensorflow as tf
 import numpy as np
 import matplotlib.pyplot as plt
 import h5py
-
-import os
 
 
 # -
@@ -114,14 +115,14 @@ def MakePlots(model, x_testset, y_testset, modelName,irun):
 
 # !ls ../data/
 
-modelName = 'SDSS_I_arch_A/'
+modelName = 'SDSS_URZ_arch_A/'
 try:
     os.mkdir('../data/models/' + modelName)
     os.mkdir('../data/models/' + modelName + 'graph')
 except:
     print('Model already exist')
 
-data = h5py.File('../data/dataset_SDSS_I.h5py','r')
+data = h5py.File('../data/dataset_SDSS_URZ.h5py','r')
 
 x_trainset = data['x_train'][()]
 y_trainset = data['y_train'][()]
@@ -185,7 +186,7 @@ input_shape = (npix, npix, nchannels) # Input shape (#rows, #cols, #channels)
 actFunction = 'relu'#tf.keras.layers.LeakyReLU(alpha=0.01) #'relu'
 
 # Hidden layers dimensions
-output_dim        = y_trainset.shape[1]
+output_dim = y_trainset.shape[1]
 
 
 # -
@@ -240,6 +241,19 @@ model.compile(optimizer = optimizer, loss = 'mse', metrics=['mae','mse'])
 
 # Callbacks
 es = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=30, restore_best_weights = True)
+
+
+# +
+from tf_explain.callbacks.smoothgrad import SmoothGradCallback
+
+smooth = SmoothGradCallback(
+            validation_data=(x_valset, y_valset),
+            class_index=0,
+            num_samples=2,
+            noise=1.,
+            output_dir='../data/models/' + modelName,
+        )
+
 # -
 
 # ## Some check previous to the fit 
@@ -272,7 +286,7 @@ batch_size = 32
 epochs     = 200
 
 with h5py.File('../data/models/' + modelName + '/scores.h5', 'a') as scores:
-    for i in range(0, 10):
+    for i in range(0, 1):
         if 'run_' + str(i) not in scores.keys():
             # instantiate model
             model = initialization(input_shape, output_dim, actFunction)
@@ -309,11 +323,56 @@ with h5py.File('../data/models/' + modelName + '/scores.h5', 'a') as scores:
             K.clear_session()
 
 # +
-img_idx = np.random.randint(0, y_testset.shape[0])
-ch = 0
+import PIL.Image
+#from matplotlib import pylab as P
+
+# From our repository.
+import saliency.core as saliency
+# -
+
+nchannels
+
+class_idx_str = 'class_idx_str'
+def call_model_function(images, call_model_args=None, expected_keys=None):
+    images = tf.convert_to_tensor(images)
+    with tf.GradientTape() as tape:
+        tape.watch( images )
+        output_layer = model( tf.reshape(images, (2,128,128,3)) )
+        output_layer = output_layer[0,4]
+        gradients = np.array(tape.gradient(output_layer, images))
+        return {saliency.base.INPUT_OUTPUT_GRADIENTS: gradients}
+       
+
+
+# +
+call_model_args = {class_idx_str: 5}
+# Construct the saliency object. This alone doesn't do anthing.
+gradient_saliency = saliency.GradientSaliency()
+
+# Compute the vanilla mask and the smoothed mask.
+vanilla_mask_3d = gradient_saliency.GetMask(x_testset[0:2], call_model_function, call_model_args)
+smoothgrad_mask_3d = gradient_saliency.GetSmoothedMask(x_testset[0:2], call_model_function, call_model_args)
+# -
+
+vanilla_mask_3d.shape
+
+plt.imshow(smoothgrad_mask_3d[0,:,:,2])
+
+# +
+img_idx = 1#np.random.randint(0, y_testset.shape[0])
+ch = 2
 fig, axes = plt.subplots(4,5,figsize=(14,14), sharex=True, sharey=True, gridspec_kw={'hspace':-0.4, 'wspace':0.1})
 
-axes[0, 0].imshow(x_testset[img_idx,:,:,ch])
+axes[0,0].imshow(x_testset[img_idx,:,:,ch])
+inax = axes[0,0].inset_axes([0,0.7,0.3,0.3])
+inax.plot(bins, y_testset[img_idx,:], c = 'black')
+inax.scatter(bins, model.predict(x_testset[img_idx].reshape(1,128,128,nchannels)), c = 'blue', marker = '.')
+inax.set_xscale('log')
+#inax.set_yscale('log')
+inax.set_xlabel('')
+inax.set_ylabel('')
+inax.set_xticks([])
+inax.set_yticks([])
 
 for i in range(19):
     input_img = tf.reshape(tf.Variable(x_testset[img_idx,:,:,:], dtype=float, trainable = True), (1,128,128,nchannels))
@@ -327,7 +386,7 @@ for i in range(19):
     arr_min, arr_max  = np.min(dgrad_max), np.max(dgrad_max)
     grad_eval = (dgrad_max - arr_min) / (arr_max - arr_min + 1e-18)
     
-    i = axes[(i+1)//5, (i+1)%5].imshow(grad_eval,cmap="jet")
+    i = axes[(i+1)//5, (i+1)%5].imshow((dgrad_max),cmap="jet")
     #fig.colorbar(i)
 # -
 
