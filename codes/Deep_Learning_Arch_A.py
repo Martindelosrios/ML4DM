@@ -141,6 +141,23 @@ bins = np.geomspace(1, 100, 20) # Radial bins for the DM profile
 
 nchannels
 
+# +
+train_sparsity = np.zeros((len(x_trainset), nchannels))
+for i in range(len(x_trainset)):
+    for j in range(nchannels):
+        train_sparsity[i, j] = len(np.where(x_trainset[i,:,:,j] < 1)[0]) / (128*128)
+        
+test_sparsity = np.zeros((len(x_testset), nchannels))
+for i in range(len(x_testset)):
+    for j in range(nchannels):
+        test_sparsity[i, j] = len(np.where(x_testset[i,:,:,j] < 1)[0]) / (128*128)
+        
+val_sparsity = np.zeros((len(x_valset), nchannels))
+for i in range(len(x_valset)):
+    for j in range(nchannels):
+        val_sparsity[i, j] = len(np.where(x_valset[i,:,:,j] < 1)[0]) / (128*128)
+# -
+
 # ## Let's normalize the in/outputs
 
 # +
@@ -286,7 +303,7 @@ batch_size = 32
 epochs     = 200
 
 with h5py.File('../data/models/' + modelName + '/scores.h5', 'a') as scores:
-    for i in range(0, 1):
+    for i in range(0, 5):
         if 'run_' + str(i) not in scores.keys():
             # instantiate model
             model = initialization(input_shape, output_dim, actFunction)
@@ -304,7 +321,7 @@ with h5py.File('../data/models/' + modelName + '/scores.h5', 'a') as scores:
             history = model.fit(x_trainset_cp, y_trainset_cp,
                             epochs           = epochs,
                             verbose          = 0,
-                            callbacks        = [es],
+                            callbacks        = [es, smooth],
                             validation_data  = (x_valset, y_valset))
             score = model.evaluate(x_testset, y_testset,verbose=1) 
             print('Results obtained in the testset...')
@@ -341,7 +358,7 @@ def call_model_function(images, call_model_args=None, expected_keys=None):
         output_layer = output_layer[0,4]
         gradients = np.array(tape.gradient(output_layer, images))
         return {saliency.base.INPUT_OUTPUT_GRADIENTS: gradients}
-       
+
 
 
 # +
@@ -356,11 +373,11 @@ smoothgrad_mask_3d = gradient_saliency.GetSmoothedMask(x_testset[0:2], call_mode
 
 vanilla_mask_3d.shape
 
-plt.imshow(smoothgrad_mask_3d[0,:,:,2])
+plt.imshow(smoothgrad_mask_3d[0,:,:,0])
 
 # +
-img_idx = 1#np.random.randint(0, y_testset.shape[0])
-ch = 2
+img_idx = np.random.randint(0, y_testset.shape[0])
+ch = 0
 fig, axes = plt.subplots(4,5,figsize=(14,14), sharex=True, sharey=True, gridspec_kw={'hspace':-0.4, 'wspace':0.1})
 
 axes[0,0].imshow(x_testset[img_idx,:,:,ch])
@@ -382,11 +399,11 @@ for i in range(19):
         
     grads = tape.gradient(result, input_img)     
     dgrad_abs = tf.math.abs(grads)
-    dgrad_max = grads.numpy()[0,:,:,ch]#np.max(dgrad_abs, axis=3)[0]
+    dgrad_max = np.max(dgrad_abs, axis=3)[0]
     arr_min, arr_max  = np.min(dgrad_max), np.max(dgrad_max)
     grad_eval = (dgrad_max - arr_min) / (arr_max - arr_min + 1e-18)
     
-    i = axes[(i+1)//5, (i+1)%5].imshow((dgrad_max),cmap="jet")
+    i = axes[(i+1)//5, (i+1)%5].imshow((grad_eval),cmap="jet")
     #fig.colorbar(i)
 # -
 
